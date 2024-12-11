@@ -57,6 +57,7 @@ rsconnect/
 
 # Files to ignore
 *.txt
+*.csv
 *.err
 *.out
 *.log
