@@ -1,0 +1,7 @@
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-DNase.macs2.hg38.narrowPeak
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-H3K27ac.hg38.narrowPeak
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-H3K27me3.hg38.narrowPeak
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-H3K36me3.hg38.narrowPeak
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-H3K4me1.hg38.narrowPeak
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-H3K4me3.hg38.narrowPeak
+/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/chipseq/t_cells/lifted/E034-H3K9me3.hg38.narrowPeak
