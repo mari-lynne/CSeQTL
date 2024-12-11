@@ -49,11 +49,11 @@ po/*~
 rsconnect/
 
 # Folders to ignore
-Rerr/
-Rout/
-old_extra/
-log/
-meta/
+**/Rerr/
+**/Rout/
+**/old_extra/
+**/log/
+**/meta/
 
 # Files to ignore
 *.txt
