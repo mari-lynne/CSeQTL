@@ -47,3 +47,15 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Folders to ignore
+Rerr/
+Rout/
+old_extra/
+log/
+
+# Files to ignore
+*.txt
+*.err
+*.out
+*.log
