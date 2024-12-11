@@ -53,6 +53,7 @@ Rerr/
 Rout/
 old_extra/
 log/
+meta/
 
 # Files to ignore
 *.txt
