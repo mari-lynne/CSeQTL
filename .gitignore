@@ -61,3 +61,6 @@ rsconnect/
 *.err
 *.out
 *.log
+
+*.Core
+*.core
