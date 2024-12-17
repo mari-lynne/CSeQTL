@@ -23,12 +23,17 @@ library(stringr)
 library(janitor)
 library(tidylog)
 library(readr)
+library(ggplot2)
+library(viridis)
+library(ggVennDiagram)
 
 # Data prep --------------------------------------------------------------------
 
 # Directories
 base_dir <- "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results"
 in_dir <- file.path(base_dir, "genotype/merged_study/eQTL/combined")
+plotdir <- file.path(base_dir, "plots/merged/eqtl")
+
 eqtls <- read_csv(file = file.path(in_dir, "eqtls_all_snps.csv.gz")) # Note this didn't save p-values of p_nom >= 0.05
 
 # (Just look at qtls from cis/ASE model for now, add in others later)
@@ -97,6 +102,49 @@ eGenes <-  all_mt %>% filter(p_bf < bh_thresh)
 save.image(file.path(in_dir, "mt_results_dec.RData"))
 
 
+# Summarize data ---------------------------------------------------------------
+
+gene_sum <- eGenes %>%
+  group_by(cell_type) %>%
+  summarise(n_genes = n_distinct(gene_name), .groups = 'drop')
+
+# Pie chart isn't really a good way of summarizing as there are overlapping genes in each category
+ggplot(gene_sum, aes(x = "", y = n_genes, fill = cell_type)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +  # Add white borders for clarity
+  coord_polar(theta = "y") +  # Use polar coordinates
+  theme_void() +  # Remove axis and grid
+  labs(fill = "Cell Type", title = "\n          eGenes per Cell Type") + 
+  theme(legend.position = "right",
+        legend.text = element_text(size = 12)) +  # Increase legend text size
+  scale_fill_viridis_d(direction = -1) +  # Apply reversed Viridis color scale
+  geom_text(aes(label = n_genes), 
+            position = position_stack(vjust = 0.5), 
+            color = "white", 
+            size = 5, 
+            fontface = "bold")  # Add bold labels with n_genes values
+
+
+### Venn diagram ---------------------------------------------------------------
+
+# Plot n of overlapping eGenes between cell types
+
+# Need to merge CD4 and CD8 results into T-cells for plotting purposes
+
+eGenes2 <- eGenes %>% 
+  mutate(cell_type = ifelse(cell_type %in% c("CD4_T_cells", "CD8_T_cells"), "T_cells", cell_type))
+
+
+ven_genes <- list(
+  `T cells` = eGenes2[eGenes2$cell_type == "T_cells", "gene_name"],
+  `B cells` = eGenes2[eGenes2$cell_type == "B_cells", "gene_name"],
+  Monocytes = eGenes2[eGenes2$cell_type == "Monocytes_Macrophages", "gene_name"],
+  Neutrophils = eGenes2[eGenes2$cell_type == "Neutrophils", "gene_name"]
+)
+
+ggVennDiagram(ven_genes) + ggtitle("Cell-Type Specific eGenes\n") +
+  ggplot2::scale_fill_gradient(low="violet",high = "gold")
+
+ggsave(file = file.path(plotdir, "eGenes_venn.png"))
 
 
 
