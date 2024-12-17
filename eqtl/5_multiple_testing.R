@@ -37,7 +37,7 @@ eqtls <- filter(eqtls, e_qtl == "CIS") # removed 7% of tests!
 # Recalculate 0 p values 
 eqtls$p_nom <- pchisq(eqtls$lrt_eqtl, df = 1, lower.tail = FALSE)
 
-# Check amount (now only 3640 zero values :)
+# Check amount (now only 3640 zero values)
 zero_ps <- filter(eqtls, p_nom == 0)
 length(unique(zero_ps$gene_name))
 
@@ -94,7 +94,7 @@ all_mt <- bind_rows(b_mt, cd8_mt, cd4_mt, neut_mt, mono_mt) # combine cell type 
 eGenes <-  all_mt %>% filter(p_bf < bh_thresh)
 
 
-
+save.image(file.path(in_dir, "mt_results_dec.RData"))
 
 
 
