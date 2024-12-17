@@ -30,7 +30,9 @@ library(tidylog)
 # Directories
 base_dir <- "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results"
 in_dir <- file.path(base_dir, "genotype/merged_study/eQTL/combined")
-eqtls <- clean_names(read.csv(file = file.path(in_dir, "eqtls_all_snps.csv"))) # Didnt save p-values of p_nom >= 0.05
+eqtls <- clean_names(read.csv(file = file.path(in_dir, "eqtls_all_snps.csv"), skipNul = T)) # Note this didn't save p-values of p_nom >= 0.05
+
+eqtls <- eqtls
 
 # Recalculate 0 p values 
 eqtls$p_nom <- pchisq(eqtls$lrt_eqtl, df = 1, lower.tail = FALSE)

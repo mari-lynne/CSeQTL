@@ -2,9 +2,10 @@
 
 # Aims -------------------------------------------------------------------------
 
-# Loop through files and filter for P val < 0.05
-# Filter for adjust P val < 0.05 (P val * 13382)
-# Plot and summarize basic results
+# Load and format all CSeQTL results
+# Recalculate very low pvalues which were rounded to zero by R
+# Basic Bonf. MT correction
+# Some basic result summary tables and plots
 
 # Packages ---------------------------------------------------------------------
 
@@ -28,15 +29,13 @@ workdir <- file.path(base_dir, "genotype/merged_study/eQTL/combined")
 plotdir <- file.path(base_dir, "plots/merged/eqtl")
 
 setwd(workdir)
-
 load(file = "eqtl_fdr_results.RData")
 
-# Some tidyting for MT script input
-eqtls_all <- clean_names(bind_rows(zero_ps, eqtls))
-eqtls_all <- eqtls_all %>% rename(p_nom = pval_final) %>% select(-pval_per_gene, -adj_p)
-write.csv(eqtls_all, file = "eqtls_all_snps.csv", row.names = F)
-
 # Clean Data -------------------------------------------------------------------
+
+# Data is saved in text files per gene, with snps in rows, and cell type summary stats in columns (i.e wide format)
+# Split data into results per cell type, as well as reconcatenating into one results DF (long format, but now grouped by cell type)
+# In final results file, as well as concatenating cell type results, concatenate all gene results = one very long results file
 
 ### Check single file ----------------------------------------------------------
 data <- fread(file = file.path(workdir, "ENSG00000171219_pvals.txt"))
@@ -68,6 +67,7 @@ neut <- split_dfs[["Neutrophils"]]
 mono <- split_dfs[["Monocytes_Macrophages"]]
 
 ### Check all files ------------------------------------------------------------
+
 files <- list.files(path = workdir, pattern = "pvals.txt", full.names = TRUE)
 n_genes <- 13365
 
@@ -146,9 +146,9 @@ cd4$ETA <- as.numeric(cd4$ETA)
 neut$ETA <- as.numeric(neut$ETA)
 mono$ETA <- as.numeric(mono$ETA)
 
-# Adjust P values  -------------------------------------------------------------
+# Make final table  ------------------------------------------------------------
 
-# Make final FDR table
+# Concat cell type results
 eqtls <- bind_rows(bcells, cd8, cd4, neut, mono)
 # Split SNP ID
 eqtls <- eqtls[, c("CHR", "POS", "REF", "ALT") := tstrsplit(SNP, ":", fixed = TRUE)]
@@ -157,21 +157,29 @@ eqtls <- eqtls[, POS := as.numeric(POS)]
 length(unique(eqtls$SNP))
 length(unique(eqtls$Gene_Name))
 
-zero_ps <- filter(eqtls, PVAL_final == 0) # Handle separately with precision float numbers
+zero_ps <- filter(eqtls, PVAL_final == 0) # Handle separately with precision float numbers (46,000)
 eqtls <- filter(eqtls, PVAL_final != 0)
 
-# Calculate adjusted p value per gene with Bonferroni
-results_fdr <- eqtls %>%
-group_by(cell_type, Gene_Name) %>%
-mutate(PVAL_per_gene = pmin(PVAL_final * length(SNP), 1)) %>%   # max p value can be is 1
-  filter(PVAL_per_gene < 0.05)
+# Some tidyting for MT script input
+eqtls_all <- clean_names(bind_rows(zero_ps, eqtls))
+eqtls_all <- eqtls_all %>% rename(p_nom = pval_final) %>% select(-adj_p)
 
-## Calc adjusted p for zero_ps -------------------------------------------------
+library(readr)
+write_csv(eqtls_all, file = "eqtls_all_snps.csv.gz")
+
+## Adjust P values -------------------------------------------------------------
 
 # Get number of SNPs per gene
 # Recalculate p values using mpfr object to store high precision float numbers
 # mpfr values don't work with functions - only simple calcs
 # Therefore Bonferroni calculation has to be in base r
+
+# Calculate adjusted p value per gene with simple Bonferroni (Note this is not the final MT method we used)
+results_fdr <- eqtls %>%
+  group_by(cell_type, Gene_Name) %>%
+  mutate(PVAL_per_gene = pmin(PVAL_final * length(SNP), 1)) %>%   # max p value can be is 1
+  filter(PVAL_per_gene < 0.05)
+
 
 # Add column where SNPs are grouped by cell type then gene name and calculate the number of SNPs per gene
 zero_ps <- zero_ps %>%
