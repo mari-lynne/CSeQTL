@@ -1,6 +1,6 @@
 # CSeQTL
 
-This repositry contains scripts used to process and analyse data for cell-specific (CS), allele-specific (AS) eQTL across in WHI particpants.
+This repositry contains scripts used to process and analyse data for cell-specific (CS), allele-specific (AS) eQTL across WHI particpants.
 
 ### Aims
 
@@ -13,10 +13,13 @@ Cell-sepecific eQTL analysis is based on the methods described in Little, P., Li
 
 #### Steps
 
-Pipeline is based on workflow described in https://github.com/pllittle/CSeQTLworkflow#eqtl-mapping. Generally .sh scripts are used to execute SLURM parallel processing steps. To run CSeQTL, phased genotype data are required, and must be formatted to tab-delim format. Phased genome data is then used to estimate allele-specific reads (ASE), in additon to total reads (TREC). Finally, cibersort deconvolution is used to estimate cell fractions, which can be input into CSeQTL function which jointly models cell-specific eQTL's, in conjuction with TREC, ASE, and prinicipal components. 
+This Pipeline is based on workflow described in https://github.com/pllittle/CSeQTLworkflow#eqtl-mapping and includes additional preprocessing/ data formatting scripts. Generally .sh scripts are used to execute SLURM parallel processing steps.
+
+To run CSeQTL, phased genotype data are used to estimate allele-specific reads (ASE), in additon to total reads (TREC) with the [asSeq](https://github.com/Sun-lab/asSeq) package. The [CibersortX](https://cibersortx.stanford.edu/) deconvolution algorithm is used to estimate cell fractions, which can be input into [CSeQTL](https://github.com/pllittle/CSeQTL) which jointly models cell-specific eQTL's, in conjuction with TREC, ASE, prinicial components and other covariates. 
 
 *wgs*
--   Pre-process phased genome information from TOPMed/WHI whole genome sequence (wgs) samples
+-   Pre-process whole genome sequence (WGS) data from TOPMed/WHI samples (Freeze 12)
+-   Phase genomes using Eagle 2 and TOPMed freeze 10 data as the reference genome
 
 *rnaseq*
 -   Pre-proccess RNAseq data to obtain, total read counts per gene (TREC), and allele specific read counts
@@ -27,23 +30,47 @@ Pipeline is based on workflow described in https://github.com/pllittle/CSeQTLwor
 *eqtl*
 -   Using allele-specific reads, covariates and cell fractions (per sample) run eQTL mapping using CSeQTL in R
 -   Downstream MT correction with eigenMT and BH for FDR
--   Summary plots and functional analysis
+-   Summary plots and downstream functional analysis
 
 
 ### Cohorts and data progress
 
-At the time of starting this project, not all data were readily availbe across both cohorts we plan on using. Therefore this table will be updated accordingly as preprocessing completes:
+2063 post-menopausal women aged between 65-95 years who were originally recruited as part of the Women’s Health Initiative study. 
+WGS and RNAseq was collected from whole blood in two batches (LLS-1 and LLS-2 a.k.a SCT study)
+WGS harmonized as part of TOPMed Freeze 12, jointly variant called.
+RNAseq bam files processed identically as part of the ASeq/CSeQTL pipeline, with RNA-batch included as a covariate in the final model.
 
-![Screenshot](datasets.png)
+| Variable           | LLS-1          | LLS-2          | Total           |
+|--------------------|----------------|----------------|-----------------|
+| **Race/Ethnicity** |                |                |                 |
+| African            | 326            | 718            | 1044            |
+| European           | 870            | 0              | 870             |
+| Hispanic           | 92             | 57             | 149             |
+| **SCT Status**     |                |                |                 |
+| 1                  | 1288           | 647            | 1935            |
+| 0                  | 0              | 128            | 128             |
+| **Age** Mean (SD)  | 81.0 (6.4)     | 75.6 (5.8)     | 79.0 (6.7)      |
+| **BMI** Mean (SD)  | 28.2 (5.8)     | 29.5 (6.2)     | 28.7 (6.0)      |
+
 
 #### File locations
 
-- SCT RNAseq (processed rna-bam files): /fh/scratch/delete90/kooperberg_c/sct_rnaseq/release_files
-- SCT WGS (raw wgs-bams): /fh/scratch/delete90/kooperberg_c/wgs_bam  
+**WGS**
+- All TOPMed bam files: (raw-bam files): /fh/scratch/delete90/kooperberg_c/topmed_freeze12/minDP10
+- LLS-1/2 bam files: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/genotype/merged_study
+- LLS-1/2 phased bcf files: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/genotype/merged_study/phased
+- WGS PC's: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/genotype/merged_study/phased/pca
 
-- LLS RNAseq (raw rna-bam files): /fh/scratch/delete90/kooperberg_c/lls_rna/bam_files
-- LLS WGS (processed wgs-bam -> phased bcfs): /fh/scratch/delete90/kooperberg_c/topmed_freeze10/phased/whi_only  
-  
-- CSeQTL data: /fh/scratch/delete90/kooperberg_c/mjohnso5/CSeQTL
-- CSeQTL test data (local): 〜/Documents/CSeQTL/data
-- CSeQTL scripts (local): 〜/Documents/CSeQTL/scripts/CSeQTL
+**RNA-seq**  
+- LLS-1 raw bam files: /fh/scratch/delete90/kooperberg_c/lls_rna/bam_files/bam_files/
+- LLS-2 raw bam files: /fh/scratch/delete90/kooperberg_c/sct_rnaseq/release_files/
+- LLS-1/2 allele specific read counts: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/genotype/merged_study/rnaseq/ASE
+
+- LLS-1/2 pre-procesed/QC rnaseq data: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/sct_lls_merged.rds
+
+**eQTL**
+- CSeQTL results and summaries: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/genotype/merged_study/eQTL/combined
+- EigenMT: /fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/eqtl/merged_study/eigenMT
+
+**Scripts** 
+- ~/CSeQTL/scripts_new
