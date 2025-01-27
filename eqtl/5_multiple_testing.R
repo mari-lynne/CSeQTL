@@ -108,8 +108,6 @@ all_mt <- bind_rows(b_mt, cd8_mt, cd4_mt, neut_mt, mono_mt) # Combine cell type 
 # Identify eGenes
 eGenes <- all_mt %>% filter(is_eGene == TRUE)
 
-# save.image(file.path(in_dir, "mt_results_dec.RData"))
-
 
 # Summarize data ---------------------------------------------------------------
 
@@ -132,6 +130,10 @@ ggplot(gene_sum, aes(x = "", y = n_genes, fill = cell_type)) +
             size = 5, 
             fontface = "bold")  # Add bold labels with n_genes values
 
+
+length(unique(eGenes$gene_name)) # 11152
+length(unique(eGenes$snp)) # 416,052
+length(eGenes$snp) # 489277, 
 
 ### Venn diagram ---------------------------------------------------------------
 
@@ -157,4 +159,12 @@ ggVennDiagram(ven_genes) + ggtitle("Cell-Type Specific eGenes\n") +
 ggsave(file = file.path(plotdir, "eGenes_venn.png"))
 ggsave(file = file.path(plotdir, "eGenes_venn.jpg"))
 
+
+rm(all_eigen, b_mt, cd8_mt, cd4_mt, neut_mt, mono_mt, eGenes2, eqtls, ven_genes)
+# save.image(file.path(in_dir, "mt_results_dec_thin.RData"))
+
+
+# Load -------------------------------------------------------------------------
+
+load(file.path(in_dir, "mt_results_dec_thin.RData"))
 
