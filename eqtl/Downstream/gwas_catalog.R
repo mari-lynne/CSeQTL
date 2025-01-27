@@ -1,4 +1,4 @@
-# GWAS catalogue comparisions
+# GWAS catalogue comparisons
 # Bioconductor
 library(BiocManager)
 library(biomaRt)
@@ -8,6 +8,7 @@ library(TxDb.Hsapiens.UCSC.hg38.knownGene)
 library(DOSE)
 library(gwascat)
 library(GenomicRanges)
+library(LDlinkR)
 
 # Data viz
 library(RColorBrewer)
@@ -27,39 +28,203 @@ library(tidyr)
 library(dplyr)
 library(tidylog)
 
+# Parallel
+library(parallel)
+library(doParallel)
+library(foreach)
+
 # options(timeout=1200)
 # BiocManager::install("SNPlocs.Hsapiens.dbSNP155.GRCh38", ask = FALSE, update = FALSE)
 # library(SNPlocs.Hsapiens.dbSNP155.GRCh38)
 
 # My eQTL data -----------------------------------------------------------------
 
-eqtls <- read.csv(file = "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/eqtl/merged_study/eigenMT/mt_nov_results.csv")
-# eqtls$seqnames <- gsub("chr", "", eqtls$chr)
+# Directories
+base_dir <- "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results"
+in_dir <- file.path(base_dir, "genotype/merged_study/eQTL/combined")
+plotdir <- file.path(base_dir, "plots/merged/eqtl")
 
+load(file.path(in_dir, "mt_results_dec_thin.RData"))
 
 # GWAS catalogue genes ---------------------------------------------------------
 
 # Load GWAS catalog data
-gwas_cat <- makeCurrentGwascat()
-gwas_cat <- clean_names(as.data.frame(mcols(gwas_cat)))
-# or
-gwas_cat <- fread("/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/gwas_catalog_v1.0-associations_e113_r2024-10-21.tsv")
+
+gwas_cat <- fread("/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/gwas_catalog_v1.0.2-associations_e113_r2024-12-19.tsv")
+
+# Tidy data 
 gwas_cat <- clean_names(gwas_cat)
-gwas_cat <- gwas_cat %>% mutate(chr = str_c("chr", chr_id)) %>% rename(pos = chr_pos) %>% select(-chr_id)
+gwas_cat <- filter(gwas_cat, chr_id %in% as.character(c(1:22))) # Only include chr 1-22
+gwas_cat <- gwas_cat %>% mutate(chr = str_c("chr", chr_id))
+gwas_cat <- gwas_cat %>% dplyr::rename(pos = chr_pos) # %>% select(-chr_id)
 gwas_cat$pos <- as.integer(gwas_cat$pos)
 
 # Filter for relevant traits ---------------------------------------------------
-# Just diseases
-cvd_traits <- c("Stroke", "stroke", "artery", "atrial", "Atrial", "hypertension", "Hypertension", "blood prerssure", "Cardiovascular", "Myocardial", "Heart", "heart", "Thrombosis", "myocardial", "cardio", "Cardio", "Cardiac", "Blood pressure")
 
-cvd_gwas <- gwas_cat[str_detect(gwas_cat$disease_trait, paste(cvd_traits, collapse = "|")), ]
-cvd_gwas <- cvd_gwas %>% select(-date_added_to_catalog, -first_author, -date, -journal, -link, -replication_sample_size, -merged, -platform_snps_passing_qc, -cnv)
+# Use EFO terms
+
+efo <- clean_names(fread("/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/resources/gwas_catalog_trait-mappings_r2024-12-19.tsv"))
+
+# Filter efo list for CVD related terms
+efo <- filter(efo, parent_term == "Cardiovascular disease" | str_detect(efo_term, "lipids ratio"))
+
+# Filter non relevant CVD diseases inc:
+# autoimmune, arrhythmia/nervous system related disorders, trauma related outcomes, pre-eclampsia valve defects and congenital diseases.
+
+efo_traits <- c("migraine", "Churg-Strauss syndrome", "Brugada syndrome",
+                "familial sick sinus syndrome", "retinal vascular disorder", "skin vascular disease",
+                "congenital anomaly of the great arteries",
+                "familial long QT syndrome", "heart septal defect", 
+                "Brugada syndrome", "hypotension", "arrhythmia", "Arrhythmia",
+                "Chagas cardiomyopathy", "angioedema", "congenital", "Mitral", "fibromuscular dysplasia",
+                "bacterial endocarditis", "atrial heart septal defect",
+                "epistaxis", "diabetic foot", "raynaud disease", 
+                "ectopy",
+                "mitral valve disease", "aortic valve disease", "pulmonary valve disease",
+                "tricuspid valve disease", "heart valve disease", "hemorrhoid", "Takotsubo cardiomyopathy",
+                "conotruncal heart malformations", "elevation", "pericarditis",
+                "CADASIL", "conduction system disorder", "congenital anomaly of cardiovascular system",
+                "hypotension", "pericardial effusion", "congenital left-sided heart lesions",
+                "chemotherapy", "sinoatrial node disorder",
+                "sick sinus syndrome", "macrovascular complications of diabetes",
+                "post-operative", 
+                "transposition of the great arteries",
+                "aortic valve insufficiency",
+                "blood vessel injury",
+                "bundle branch block",
+                "cardiotoxicity",
+                "Spontaneous coronary artery dissection",
+                "cervical artery dissection",
+                "coronary vasospasm",
+                "endocarditis",
+                "heart conduction disease",
+                "inflammation of heart layer",
+                "Pseudotumor cerebri",
+                "rheumatic heart disease",
+                "arteritis",
+                "tachycardia",
+                "ventricular outflow obstruction",
+                "torsades de pointes",
+                "vascular dementia",
+                "chronic venous insufficiency",
+                "fibrillation",
+                "hemorrhage",
+                "aortic coarctation",
+                "retinal vein occlusion",
+                "Arteritis",
+                "myocarditis",
+                "retinal vein occlusion",
+                "premature cardiac contractions",
+                "coronary restenosis",
+                "pregnancy") 
+
+efo <- efo[!str_detect(efo$efo_term, paste(efo_traits, collapse = "|")), ] # 701 traits
+traits <- as.data.frame(unique(efo$efo_term)) 
+
+gwas_efo <- inner_join(gwas_cat, efo, by = "disease_trait") %>% distinct()
+traits <- as.data.frame(unique(gwas_efo$efo_term))
+
+
+# Get GWAS genes
+snp_genes <- unique(unlist(strsplit(gwas_efo$snp_gene_ids, ", ")))
+gwas_genes <- unique(c(gwas_efo$upstream_gene_id, gwas_efo$downstream_gene_id, snp_genes)) # 4685 GWAS gene ids
+
+gwas_eqtl_genes <- intersect(gwas_genes, eGenes$gene_name) # 1859 genes to finemap
+
+# SUMMARY
+
+# 8703 SNPs without lipid ratios
+# 16,754 SNPs when including lipid ratios
+# 56 vs 61 parent traits overall to examine
+
+# With lipid ratios, 1859 GWAS-eGenes to examine
+
+
+# For each set of GWAS SNPs, we have obtained correlated SNPs that are in linkage disequilibrium (LD) with any of the original SNPs. We used the LDProxy Tool [33] and extracted the proxy SNPs via their API functionality. Proxy SNPs from the European cohort with an R2 >  = 0.75 and within a window of ± 500 000 bp centered around the original SNP were added to the GWAS SNPs. The combined set of proxy and lead SNPs was used as input set to SNEEP.
+
+
+# LD Proxy set up --------------------------------------------------------------
+
+gwas_snps <- unique(gwas_efo$snps) # 7631 SNPs
+
+# Do in batches of 1000 so not to overload API server
+# Initialize a list to store batches
+batch_list <- list()
+
+# Calculate the number of batches needed
+total_snps <- length(gwas_snps)
+num_batches <- ceiling(total_snps / 1350) 
+
+# Loop to create batches
+for (i in 1:num_batches) {
+  start_index <- (i - 1) * 1000 + 1
+  end_index <- min(i * 1000, total_snps)
+  batch_list[[i]] <- gwas_snps[start_index:end_index]
+}
+
+# Assign names to each batch for easier reference
+names(batch_list) <- paste0("batch_", 1:num_batches)
+
+# Remove first batch (already run as test)
+batch_list <- batch_list[-1]
+
+# Run LD Proxy VIP -------------------------------------------------------------
+
+setwd("/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results/genotype/merged_study/eQTL/combined/LDproxy")
+
+# VIP API generated from https://ldlink.nih.gov/?tab=apiaccess and email authors for VIP access
+# dbddeb68ba85
+
+# Run in parallel
+
+# Register parallel backend to use a single core per task
+numCores <- 5 # detectCores()  # Or specify the number of cores you want to use
+cl <- makeCluster(numCores)
+registerDoParallel(cl)
+
+# Run batches in parallel without collecting results
+foreach(i = seq_along(batch_list), .packages = 'LDlinkR') %dopar% {
+  start <- Sys.time()  # Start time for performance monitoring
+  
+  LDproxy_batch(
+    snp = batch_list[[i]],
+    pop = c("EUR", "AFR"),
+    r2d = "r2",
+    token = "dbddeb68ba85",
+    append = FALSE,
+    genome_build = "grch38",
+    win_size = "500000",
+    api_root = "https://ldlink.nih.gov/LDlinkRest"
+  )
+  
+  end <- Sys.time()  # End time for performance monitoring
+  time_taken <- end - start  # Calculate time taken for the job
+  
+  cat("Completed batch", i, "in", time_taken, "seconds\n")
+}
+
+# Stop the parallel cluster after all jobs are done
+stopCluster(cl)
+
+
+
+
+
+
+
+
+
+
+
+
 
 eqtl_cvd <- inner_join(cvd_gwas, eqtls, by = c("chr", "pos"))
 
 # Split by cell type
 eqtl_cvd_split <- split(eqtl_cvd, eqtl_cvd$cell_type)
 list2env(eqtl_cvd_split, envir = .GlobalEnv)
+
+
 
 
 # Epigenetic Data --------------------------------------------------------------
