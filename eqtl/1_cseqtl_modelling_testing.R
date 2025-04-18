@@ -22,30 +22,29 @@ library("CSeQTL")
 # n_cores <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK"))
 
 # For test
-array <- read.csv(file = "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/scripts/eQTL/eqtl_array_all_chr_rmdup.csv")
+array <- read.csv(file = "/fh/working/hsu_l/Mari/cseqtl/scripts/eqtl_array_all_chr_rmdup.csv")
 gene_id <- array[5, "ensembl_gene_id"]
 n_cores <- 4
 
 
 # Data Directories -------------------------------------------------------------
 
-base_dir <- "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results"
+base_dir <- "/fh/working/hsu_l/Mari/cseqtl"
 
-snp_dir <- file.path(base_dir, "genotype/merged_study/phased/per_gene")
+snp_dir <- file.path(base_dir, "genotype/phased/per_gene")
 
-aseq_dir <- file.path(base_dir, "/genotype/merged_study/rnaseq/ASE/qc_genes/per_gene")
+aseq_dir <- file.path(base_dir, "rnaseq/ASE/qc_genes/per_gene")
 
-meta_dir <- file.path(base_dir, "metadata/merged")
+meta_dir <- file.path(base_dir, "metadata")
 
-out_dir <- file.path(base_dir, "/genotype/merged_study/eQTL")
+out_dir <- file.path(base_dir, "eqtl")
 
 # Load Covariates --------------------------------------------------------------
 
-# See covar_modelling.R
+# Updated from 1_rnaseq_qc.R # See covar_modelling.R
 ids <- read.csv(file = file.path(meta_dir, "cseqtl_ids_rna_order.csv"))
 # model_covars_base
 covars <- read.csv(file = file.path(meta_dir, "cseqtl_sample_xx_vars.csv"))
-covars <- rename(covars, log_lib_size = lib.size)
 num_vars <- covars %>% select(draw_age, log_lib_size)
 
 # center numeric covariates (poss dont need to recentre pcs tho)
@@ -62,6 +61,7 @@ num_vars <- as.data.frame(sapply(num_vars, centre))
 covars <- covars %>% select(-draw_age, -log_lib_size)
 model_covars <- cbind(num_vars, covars)
 row.names(model_covars) <- ids$geno_id
+
 
 # Load RHO (Cell type proportions) ---------------------------------------------
 RHO <- read.csv(file.path(meta_dir, "cseqtl_rho.csv"))
@@ -100,7 +100,7 @@ SNP_bkp <- SNP
 
 ### Filter duplicate SNPs ------------------------------------------------------
 # Checked test gene (5000 SNPs 178 dup sites - majority were the same genotype i.e 0:0 or 3:3 a few 1/2s)
-# Based on that it's fine to just keep the first entry (shouldn't majorily impact data)
+# Based on that it's fine to just keep the first entry (shouldn't majorly impact data)
 SNP <- SNP[, .(genotype_code = genotype_code[1]), by = .(snp_id, sample_id)]
 
 # Reshape data to wide format using dcast
@@ -257,4 +257,6 @@ write.table(sig_ase, file = file.path(out_dir, paste0("trecase/", gene_id, "_pva
 
 write.table(sig_trec, file = file.path(out_dir, paste0("trec/", gene_id, "_pvals.txt")),
             quote = F, sep = "\t", row.names = F)
+
+
 

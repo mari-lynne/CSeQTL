@@ -1,13 +1,4 @@
-# Linear model testing ---------------------------------------------------------
-
-library(asSeq)
-?asSeq::trecase
-
-data(KLK1)
-attach(KLK1)
-names(KLK1)
-str(KLK1[["Z"]]) # Just one gene and one SNP it seems in example 
-
+# AS-seq Modelling -------------------------------------------------------------
 
 # All matrices, rows = samples, cols = genes or SNPs
 # Y = gene expression matrix
@@ -27,13 +18,6 @@ str(KLK1[["Z"]]) # Just one gene and one SNP it seems in example
 
 # So in effect we can run per gene, with a genotype matrix per SNP as we have done before for CSeQTL
 
-# TODO:
-
-dim(SNP_test) # transform to samples by SNPs
-dim(aseq_dat) # just subset, Y = aseq_dat$trec, Y1 = aseq_dat$hap1
-dim(covars) # get relevant covars, re run on covar_modelling on residuals but no cell types perhaps 
-
-
 # Set up -----------------------------------------------------------------------
 
 library("stringr")
@@ -42,38 +26,21 @@ library("dplyr")
 library("smarter")
 library("asSeq")
 
-# Inherit arguments
-# args <- commandArgs(trailingOnly = TRUE)
-# cat("Inherited arguments:", paste(args, collapse = " "), "\n")
-# array_file <- args[1]
-# index <- as.integer(args[2])
-# array <- read.csv(file = array_file)
+# Inherit arguments from submission script
+args <- commandArgs(trailingOnly = TRUE)
+cat("Inherited arguments:", paste(args, collapse = " "), "\n")
+
+array_file <- args[1]
+index <- as.integer(args[2])
+array <- read.csv(file = array_file)
+gene_id <- array[index, "ensembl_gene_id"]
+n_cores <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK"))
+
+# # For test
+# array <- read.csv(file = "/fh/working/hsu_l/Mari/cseqtl/scripts/trecase_array_all_chr_rmdup.csv")
+# index <- 5
 # gene_id <- array[index, "ensembl_gene_id"]
-# n_cores <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK"))
-
-# For test
-array <- read.csv(file = "/fh/working/hsu_l/Mari/cseqtl/scripts/eqtl_array_all_chr_rmdup.csv")
-gene_id <- array[5, "ensembl_gene_id"]
-n_cores <- 4
-
-# Update array -----------------------------------------------------------------
-
-# set up mart
-library(biomaRt)
-ensembl <- useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
-chroms <- (1:22)
-
-# get coordinates
-coord <- getBM(
-  attributes=c('ensembl_gene_id','chromosome_name','start_position','end_position', 'hgnc_symbol'),
-  filters = c('chromosome_name', 'ensembl_gene_id'),
-  values = list(chromosome_name=chroms, ensembl_gene_id=array$ensembl_gene_id),
-  mart = ensembl)
-
-coord <- inner_join(array, coord, by = c("ensembl_gene_id", "chromosome_name")) 
-
-write.csv(coord,
-          file = "/fh/working/hsu_l/Mari/cseqtl/scripts/trecase_array_all_chr_rmdup.csv", row.names = F, quote = F)
+# n_cores <- 4
 
 # Data Directories -------------------------------------------------------------
 
@@ -90,7 +57,7 @@ setwd(out_dir)
 # Updated from 1_rnaseq_qc.R # See covar_modelling.R # update rna pcs
 ids <- read.csv(file = file.path(meta_dir, "cseqtl_ids_rna_order.csv"))
 # model_covars_base
-covars <- read.csv(file = file.path(meta_dir, "cseqtl_sample_xx_vars.csv"))
+covars <- read.csv(file = file.path(meta_dir, "trecase_sample_xx_vars.csv"))
 num_vars <- covars %>% select(draw_age, log_lib_size)
 
 # center numeric covariates (poss dont need to recentre pcs tho)
@@ -112,9 +79,8 @@ row.names(model_covars) <- ids$geno_id
 model_covars$sct <- as.factor(model_covars$sct)
 model_covars$ethnicity <- as.factor(model_covars$ethnicity)
 model_covars$rna_batch <- as.factor(model_covars$rna_batch)
-design <- model.matrix(~ ., data = model_covars) # remove intercept
-design <- design[,-1]
-dim(design)
+design <- model.matrix(~ ., data = model_covars) 
+design <- design[,-1] # remove intercept
 
 # Load SNP data ----------------------------------------------------------------
 
@@ -138,7 +104,6 @@ SNP[, `:=`(
 
 # Select the required columns, filter rows to include correct samples
 SNP <- SNP[sample_id %in% ids$geno_id, .(sample_id, snp_id, genotype_code)]
-SNP_bkp <- SNP
 
 ### Filter duplicate SNPs ------------------------------------------------------
 
@@ -159,7 +124,7 @@ SNP <- SNP[,-1]
 SNP <- t(SNP) # transform for aseq format
 
 
-# AS-Seq data ------------------------------------------------------------------
+# AS-seq data ------------------------------------------------------------------
 
 # Load ASeq data 
 
@@ -175,55 +140,39 @@ aseq_dat$ASREC <- aseq_dat$hap1 + aseq_dat$hap2
 aseq_dat <- aseq_dat[match(row.names(SNP), aseq_dat$sample_id), ]
 design <- design[match(row.names(SNP), row.names(design)), ]
 
+# Gene/SNP loc files -----------------------------------------------------------
 
-# Gene loc file ----------------------------------------------------------------
-
-# inf <- ENSG00000067064 10 1039152 1049119
-
-chri <- 10 # inf[,2]
-n_snps <- ncol(SNP_test)
-n_genes <- 1 # ncol(aseq_dat$trec)
-
+n_snps = ncol(SNP)
+n_genes = 1 # ncol(aseq_dat$trec)
+chri = array[index, "chromosome_name"]
 
 eChr = rep(chri, n_genes) # n_genes
-eStart = 1039152 # inf[,3]
-eEnd = 1049119 # inf[,4]
+eStart = array[index,"start_position"]
+eEnd = array[index,"end_position"]
 eExt = eEnd-eStart
 pos = round((eStart+eEnd)/2)
 
-mPos <- as.numeric(sapply(str_split(colnames(SNP_test), ":"), function(x) x[2])) # SNP/Marker positions
+mPos = as.numeric(sapply(str_split(colnames(SNP), ":"), function(x) x[2])) # SNP/Marker positions
 mChr = rep(chri, n_snps)
 
 
 # Run Model --------------------------------------------------------------------
 
-SNP_test <- SNP[ ,1:10]
-# 10: 1,039,152-1,049,119
-
-res.fil = "test2"
+res.fil = gene_id
 res.lon = sprintf("%s_eqtl.txt", res.fil)
 
 trecase(Y = aseq_dat$trec,
         Y1 = aseq_dat$hap1,
         Y2 = aseq_dat$hap2,
         X = design,
-        Z = SNP_test,
+        Z = SNP,
         eChr = eChr,
         mChr = mChr,
         ePos = pos,
         mPos = mPos,
         output.tag = res.fil,
-        p.cut = 1)
+        local.distance = 5e5,
+        local.only = FALSE,
+        trace = 1,
+        p.cut = 0.05)
 
-
-# Output -----------------------------------------------------------------------
-
-# res.fil = sprintf("v1_%s", inf[,1])
-
-
-
-eqtl = read.table(res.lon, header=T, as.is=T)
-eqtl[,1] = posi[eqtl[,2]]; colnames(eqtl)[1] = "Pos"
-eqtl[,2] = vcfi[eqtl[,2]]
-write.table(eqtl, res.lon, row.names=F, col.names=T, quote=F, sep="\t")
-message("done version 1")

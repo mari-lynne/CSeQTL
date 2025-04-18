@@ -20,22 +20,22 @@ library(ggpubr)
 library(dplyr)
 library(tidyr)
 library(tidylog)
-source("/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/scripts/functions.R")
+source("~/CSeQTL/scripts_new/functions.R")
 
 ## Dirs and Vars ---------------------------------------------------------------
 
 # Input Directories
-base_dir <- "/fh/scratch/delete90/kooperberg_c/mjohnson/cseqtl/results"
-rna_dir <- file.path(base_dir, "genotype/merged_study/rnaseq")
-out_dir <- file.path(base_dir, "genotype/merged_study/rnaseq")
-plot_dir <- file.path(base_dir, "plots/merged")
-meta_dir <- file.path(base_dir, "metadata/merged")
+base_dir <- "/fh/working/hsu_l/Mari/cseqtl"
+rna_dir <- file.path(base_dir, "rnaseq")
+out_dir <- file.path(base_dir, "rnaseq")
+plot_dir <- file.path(base_dir, "rnasq/plots")
+meta_dir <- file.path(base_dir, "metadata/check")
 
 setwd(rna_dir)
 
 ## Format data -----------------------------------------------------------------
 
-dge <- readRDS(file = file.path(rna_dir, "sct_lls_merged.rds"))
+dge <- readRDS(file = "/fh/working/hsu_l/Mari/cseqtl/rnaseq/sct_lls_merged.rds") 
 dge$samples <- dge$samples %>% select(-"X.FID")
 dge$samples <- dge$samples %>% select(-"norm.factors")
 
@@ -55,7 +55,6 @@ dge$samples$plate <- as.factor(dge$samples$plate)
 # CSeQTL covariates (see variable importance check script)
 covar_use <- dge$samples %>%
   select(ethnicity, sct, draw_age,
-         Neutrophils, Monocytes_Macrophages, CD4_T_cells, CD8_T_cells, B_cells,
          PC1, PC2, PC3, PC4, PC5, rna_batch)
 
 covar_use <- covar_use %>%
@@ -107,11 +106,10 @@ res_df <- as.data.frame(res_pca$x)
 # colnames(res_df) <- str_c(colnames(res_df), "_res")
 res_df$subject_id <- row.names(res_df)
 plot_vars <- bind_cols(covar_use, dge$samples$subject_id)
-plot_vars <- rename(plot_vars, subject_id = "...15")
+plot_vars <- rename(plot_vars, subject_id = "...10") # 15 cseqtl
 
 res_df <- left_join(res_df, plot_vars, by = "subject_id")
 # res_df <- res_df[order(res_df$ethnic, decreasing = TRUE), ]
-
 res_df$ethnicity <- as.factor(res_df$ethnicity)
 res_df$sct <- as.factor(res_df$sct)
 
@@ -186,13 +184,13 @@ pve_plot <- ggplot(pve_df, aes(PC, V1, colour = PC)) +
   ylab("\nProportion of Variance (%)\n") +
   scale_colour_manual(values = pve_pal) +
   theme_bw() + theme(legend.position = "none") +
-  ggtitle("LLS Residual PCA")
+  ggtitle("RNA-seq Residual PCA")
 
 pve_plot
 str(pve_df)
 
 pve_plot1|pve_plot
-ggsave(filename = file.path(plot_dir, "res_rna_pve.png"))
+ggsave(filename = "/fh/working/hsu_l/Mari/cseqtl/rnaseq/plots/res_rna_pve.png")
 
 # Investigate genes driving residual 1 variance 
 loadings_pc1 <- res_pca$rotation[,1]
@@ -208,7 +206,7 @@ rm(loadings_pc1)
 covar_new <- res_df[,-c(16:25)] # extra PCs
 covar_new <- covar_new  %>% select(-subject_id)
 
-# save.image(file = file.path(out_dir, "res_pca_modelling.RData"))
+# save.image(file = file.path(out_dir, "trecase_res_pca_modelling.RData")) 
 
 
 # Other residual plots ---------------------------------------------------------
@@ -309,17 +307,17 @@ print(t_test_result)
 ### Log library size -----------------------------------------------------------
 # Each column is a sample, rows are genes, therefore colsums are the total lib size for that sample
 dim(dge$counts)
-lib.size <- log10(colSums(dge$counts))
+log_lib_size <- log(colSums(dge$counts))
 
 # PCs and known covariates
 covar_new <- res_df[,-c(16:25)] # minus extra PCs
-covar_new <- covar_new [,-c(20:24)] # minus cell props
+# covar_new <- covar_new [,-c(20:24)] # minus cell props
 covar_new <- covar_new %>% select(-subject_id)
-cseqtl_sample_xx_vars <- cbind(lib.size, covar_new)
+cseqtl_sample_xx_vars <- cbind(log_lib_size, covar_new)
 
-
+meta_dir <- "/fh/working/hsu_l/Mari/cseqtl/metadata"
 write.csv(cseqtl_sample_xx_vars,
-          file = file.path(meta_dir, "cseqtl_sample_xx_vars.csv"),
+          file = file.path(meta_dir, "trecase_sample_xx_vars.csv"),
           row.names = F)
 
 # Cell type proportions
